@@ -1,7 +1,17 @@
+import org.apache.spark.sql.functions.desc
+import org.apache.spark.sql.types.{DoubleType, StructType}
+
+
 /**
   * Created by pi on 18-4-7.
   */
+
 object CityDistanceCluster {
+  val cityDataPath = "/Users/chenyang/Downloads/citydata2315.csv"
+  val filteredDataPath = "/Users/chenyang/Downloads/FilteredData.csv"
+  val distance = 2000000
+  val weight = 300000
+
   def rad(d:Double): Double ={
     d * Math.PI / 180.00
   }
@@ -16,14 +26,62 @@ object CityDistanceCluster {
     s = Math.round(s * 10000d) / 10000d;//精确距离的数值
     s
   }
-
+  case class CityGroup(center: String, city: String)
   def main(args: Array[String]) {
     val spark = new Configure().ss
     import spark.implicits._
-    val citylnglat = spark.read.csv("/home/pi/Documents/DataSet/Transport/output/citydata2315")
-      .toDF("市", "站名", "lng", "lat").select("市", "lng", "lat").distinct();
-    citylnglat.show(false)
-    println("CityNum:"+citylnglat.count())
+    val citylnglat = spark.read.csv(cityDataPath)
+      .toDF("市", "站名", "lng", "lat")
+    val allcity = citylnglat.select(
+      citylnglat.col("市"), citylnglat.col("lng").cast(DoubleType), citylnglat.col("lat").cast(DoubleType)).distinct();
+    allcity.show(false)
+    println("CityNum:" + allcity.count())
 
+
+    val dataArr = allcity.collect()
+    var cityList = Seq(CityGroup("", ""))
+    for (i <- 0 to dataArr.length - 1) {
+      //var cityGroup: Map[String, String] = Map()
+      //cityGroup += ("center" -> dataArr.apply(i).getString(0))
+      for (j <- 0 to dataArr.length - 1) {
+        //print(dataArr.apply(i).getDouble(1)+","+dataArr.apply(i).getDouble(2)+"/")
+        //println(dataArr.apply(j).getDouble(1)+","+dataArr.apply(j).getDouble(2))
+
+        if (calculateDistance(dataArr.apply(i).getDouble(1), dataArr.apply(i).getDouble(2),
+          dataArr.apply(j).getDouble(1), dataArr.apply(j).getDouble(2)) < distance) {
+          cityList :+= CityGroup(dataArr.apply(i).getString(0), dataArr.apply(j).getString(0))
+          //cityList.toDF().show()
+          //println(dataArr.apply(i).getString(0) + "-" + dataArr.apply(j).getString(0))
+        }
+      }
+    }
+    val cityFrame = cityList.toDF("中心", "城市")
+    cityFrame.show()
+    println("citycount:"+cityFrame.count())
+    println("centercount:"+cityFrame.select("中心").distinct().count())
+    val cityCount = cityFrame.groupBy("中心").count()
+    val group = cityFrame.join(cityCount, "中心").filter($"count" > 1)
+      .select("中心", "城市")
+    group.show()
+
+
+    val filtereddata = spark.read.csv(filteredDataPath)
+      .toDF("品名","品名代码","发送城市", "发送城市经度", "发送城市纬度", "到达城市", "到达城市经度", "到达城市纬度",
+        "物流总包（Y物流总包，N非物流总包）","车数","吨数")
+    val sumcity = filtereddata.select(
+      filtereddata.col("发送城市"), filtereddata.col("到达城市"),filtereddata.col("吨数").cast(DoubleType))
+      .groupBy("发送城市", "到达城市").sum("吨数")
+    //sumcity.orderBy(desc("sum(吨数)")).show(1000, false)
+    println("SumLineCount:"+sumcity.count())
+    val fgroupWeight = group.toDF("发送中心", "发送城市").join(sumcity, "发送城市")
+    fgroupWeight.show(false)
+    val dgroupWeight = fgroupWeight.join(group.toDF("到达中心", "到达城市"), "到达城市")
+    dgroupWeight.show(false)
+    println("TotalCount:"+dgroupWeight.count())
+    val groupToGroup = dgroupWeight.select("发送中心", "到达中心", "sum(吨数)")
+      .groupBy("发送中心", "到达中心").sum("sum(吨数)")
+    groupToGroup.orderBy(desc("sum(sum(吨数))")).show(1000, false)
+    println("GroupToGroupCount:"+groupToGroup.count())
+    println("GroupToGroupCount:"+groupToGroup.filter($"sum(sum(吨数))">weight).count())
   }
 }

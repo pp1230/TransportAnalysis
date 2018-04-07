@@ -10,14 +10,14 @@ object LinesCluster {
   def main(args: Array[String]) {
     val spark = new Configure().ss
     import spark.implicits._
-    val filtereddata = spark.read.csv("/home/pi/Documents/DataSet/Transport/FilteredData.csv")
+    val filtereddata = spark.read.csv("/Users/chenyang/Downloads/FilteredData.csv")
       .toDF("品名","品名代码","发送城市", "发送城市经度", "发送城市纬度", "到达城市", "到达城市经度", "到达城市纬度",
         "物流总包（Y物流总包，N非物流总包）","车数","吨数")
     val sumcity = filtereddata.select(
       filtereddata.col("发送城市"), filtereddata.col("到达城市"),filtereddata.col("吨数").cast(DoubleType))
       .groupBy("发送城市", "到达城市").sum("吨数")
     sumcity.orderBy(desc("sum(吨数)")).show(1000, false)
-    val citylnglat = spark.read.csv("/home/pi/Documents/DataSet/Transport/output/citydata2315")
+    val citylnglat = spark.read.csv("/Users/chenyang/Downloads/citydata2315.csv")
       .toDF("市", "站名", "经度", "纬度").select("市", "经度", "纬度").distinct();
 
     val sumfzlnglat = sumcity.join(citylnglat.toDF("发送城市", "发送城市经度", "发送城市纬度"), "发送城市")
