@@ -6,8 +6,8 @@ object ReplaceData {
   def main(args: Array[String]) {
     val spark = new Configure().ss
     import spark.implicits._
-    val alldata = spark.read.csv("/home/pi/Documents/DataSet/Transport/alldata0114.csv")
-      .toDF("id","品名","品名代码","发局","发站","到局","到站"
+    val alldata = spark.read.csv("/home/pi/Documents/DataSet/Transport/2016elec.csv")
+      .toDF("id","票号","工作日期","品名","品名代码","发局","发站","到局","到站"
         ,"发货人","物流总包（Y物流总包，N非物流总包）","车数","吨数","收入")
     alldata.show(false)
     println("AlldataCount:"+alldata.count())
@@ -25,9 +25,9 @@ object ReplaceData {
     endcity.show(false)
     println("EndcityCount:"+endcity.count())
     val filteredData = endcity.select("品名","品名代码","发送城市", "发送城市经度", "发送城市纬度", "到达城市", "到达城市经度", "到达城市纬度",
-      "物流总包（Y物流总包，N非物流总包）","车数","吨数")
+      "物流总包（Y物流总包，N非物流总包）","车数","吨数", "工作日期")
     filteredData.show(1000, false)
-    filteredData.repartition(1).write.csv("/home/pi/Documents/DataSet/Transport/output/FilteredData")
+    filteredData.repartition(1).write.csv("/home/pi/Documents/DataSet/Transport/output/AddDate")
   }
 
 }

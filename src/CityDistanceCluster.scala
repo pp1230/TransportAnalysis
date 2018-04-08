@@ -7,9 +7,11 @@ import org.apache.spark.sql.types.{DoubleType, StructType}
   */
 
 object CityDistanceCluster {
-  val cityDataPath = "/Users/chenyang/Downloads/citydata2315.csv"
-  val filteredDataPath = "/Users/chenyang/Downloads/FilteredData.csv"
-  val distance = 2000000
+  val cityDataPath = "/home/pi/Documents/DataSet/Transport/output/citydata2315"
+  val filteredDataPath = "/home/pi/Documents/DataSet/Transport/output/FilteredData"
+  val outputPath1 = "/home/pi/Documents/DataSet/Transport/output/GroupToGroupLines"
+  val outputPath2 = "/home/pi/Documents/DataSet/Transport/output/GroupToGroupFilteredLines"
+  val distance = 100000
   val weight = 300000
 
   def rad(d:Double): Double ={
@@ -70,18 +72,23 @@ object CityDistanceCluster {
         "物流总包（Y物流总包，N非物流总包）","车数","吨数")
     val sumcity = filtereddata.select(
       filtereddata.col("发送城市"), filtereddata.col("到达城市"),filtereddata.col("吨数").cast(DoubleType))
-      .groupBy("发送城市", "到达城市").sum("吨数")
-    //sumcity.orderBy(desc("sum(吨数)")).show(1000, false)
+      .groupBy("发送城市", "到达城市").sum("吨数").filter($"sum(吨数)" < weight)
+    sumcity.orderBy(desc("sum(吨数)")).show(false)
     println("SumLineCount:"+sumcity.count())
     val fgroupWeight = group.toDF("发送中心", "发送城市").join(sumcity, "发送城市")
     fgroupWeight.show(false)
+    println("TotalCount1:"+fgroupWeight.count())
     val dgroupWeight = fgroupWeight.join(group.toDF("到达中心", "到达城市"), "到达城市")
     dgroupWeight.show(false)
-    println("TotalCount:"+dgroupWeight.count())
+    println("TotalCount2:"+dgroupWeight.count())
     val groupToGroup = dgroupWeight.select("发送中心", "到达中心", "sum(吨数)")
-      .groupBy("发送中心", "到达中心").sum("sum(吨数)")
-    groupToGroup.orderBy(desc("sum(sum(吨数))")).show(1000, false)
+      .groupBy("发送中心", "到达中心").sum("sum(吨数)").orderBy(desc("sum(sum(吨数))"))
+    groupToGroup.show(false)
+    val filteredGroup = groupToGroup.filter($"sum(sum(吨数))">weight)
     println("GroupToGroupCount:"+groupToGroup.count())
-    println("GroupToGroupCount:"+groupToGroup.filter($"sum(sum(吨数))">weight).count())
+    println("GroupToGroupFilteredCount:"+filteredGroup.count())
+    groupToGroup.repartition(1).write.csv(outputPath1)
+    filteredGroup.repartition(1).write.csv(outputPath2)
+
   }
 }
